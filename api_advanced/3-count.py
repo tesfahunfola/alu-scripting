@@ -1,51 +1,43 @@
 #!/usr/bin/python3
-"""Module for count_words function"""
+"""
+Recursive function to count keywords from hot articles on Reddit.
+"""
 
-import json
 import requests
 
 
-def count_words(subreddit, word_list, after='', hot_list=[]):
-    """Function that queries the Reddit API."""
-    if after == '':
-        hot_list = [0] * len(word_list)
-    url = "https://www.reddit.com/r/{}/hot.json" \
-        .format(subreddit)
-    request = requests.get(url, params={'after': after},
-                           allow_redirects=False,
-                           headers={'User-Agent': 'My User Agent 1.0'})
-    if request.status_code == 200:
-        data = request.json()
+def count_words(subreddit, word_list, after='', counts=None):
+    if counts is None:
+        counts = {}
+        word_list = [word.lower() for word in word_list]
 
-        for topic in (data['data']['children']):
-            for word in topic['data']['title'].split():
-                for i in range(len(word_list)):
-                    if word_list[i].lower() == word.lower():
-                        hot_list[i] += 1
+    if after is None:
+        sorted_counts = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+        for word, count in sorted_counts:
+            if count > 0:
+                print(f"{word}: {count}")
+        return
 
+    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    params = {'limit': 100, 'after': after}
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        children = data['data']['children']
+        for child in children:
+            title = child['data']['title'].lower().split()
+            for word in word_list:
+                if word in title:
+                    counts[word] = counts.get(word, 0) + 1
         after = data['data']['after']
-        if after is None:
-            save = []
-            for i in range(len(word_list)):
-                for j in range(i + 1, len(word_list)):
-                    if word_list[i].lower() == word_list[j].lower():
-                        save.append(j)
-                        hot_list[i] += hot_list[j]
+        count_words(subreddit, word_list, after, counts)
+    else:
+        print("Invalid subreddit or no posts match.")
 
-            for i in range(len(word_list)):
-                for j in range(i, len(word_list)):
-                    if (hot_list[j] > hot_list[i] or
-                            (word_list[i] > word_list[j] and
-                             hot_list[j] == hot_list[i])):
-                        a = hot_list[i]
-                        hot_list[i] = hot_list[j]
-                        hot_list[j] = a
-                        a = word_list[i]
-                        word_list[i] = word_list[j]
-                        word_list[j] = a
 
-            for i in range(len(word_list)):
-                if (hot_list[i] > 0) and i not in save:
-                    print("{}: {}".format(word_list[i].lower(), hot_list[i]))
-        else:
-            count_words(subreddit, word_list, after, hot_list)
+if __name__ == '__main__':
+    subreddit = "unpopular"
+    word_list = ['you', 'unpopular', 'vote', 'down', 'downvote', 'her', 'politics']
+    count_words(subreddit, word_list)
